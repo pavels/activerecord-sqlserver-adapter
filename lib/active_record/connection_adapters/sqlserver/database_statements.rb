@@ -218,7 +218,9 @@ module ActiveRecord
         def sql_for_insert(sql, pk, id_value, sequence_name, binds)
           sql = if pk && self.class.use_output_inserted
             quoted_pk = SQLServer::Utils.extract_identifiers(pk).quoted
-            sql.insert sql.index(/ (DEFAULT )?VALUES/), " OUTPUT INSERTED.#{quoted_pk}"
+            declare_temp_table = "DECLARE @TblOutput TABLE ( [OutPK] sql_variant ) \n"
+            select_from_output = "\n SELECT [OutPK] FROM @TblOutput \n"
+            declare_temp_table + sql.insert(sql.index(/ (DEFAULT )?VALUES/), " OUTPUT INSERTED.#{quoted_pk} INTO @TblOutput") + select_from_output
           else
             "#{sql}; SELECT CAST(SCOPE_IDENTITY() AS bigint) AS Ident"
           end
