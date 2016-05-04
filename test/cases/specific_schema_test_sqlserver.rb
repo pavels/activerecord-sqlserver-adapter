@@ -68,6 +68,15 @@ class SpecificSchemaTestSQLServer < ActiveRecord::TestCase
     obj.reload.date.must_be_instance_of Date
   end
 
+  it 'allows datetime2 as timestamps' do
+    SSTestBooking.columns_hash['created_at'].sql_type.must_equal 'datetime2(7)'
+    SSTestBooking.columns_hash['updated_at'].sql_type.must_equal 'datetime2(7)'
+    obj1 = SSTestBooking.new name: 'test1'
+    obj1.save!
+    obj1.created_at.must_be_instance_of Time
+    obj1.updated_at.must_be_instance_of Time
+  end
+
   # Natural primary keys.
 
   it 'work with identity inserts' do
@@ -96,6 +105,24 @@ class SpecificSchemaTestSQLServer < ActiveRecord::TestCase
     r = SSTestEdgeSchema.create! 'crazy]]quote' => 'crazyqoute'
     assert SSTestEdgeSchema.columns_hash['crazy]]quote']
     assert_equal r, SSTestEdgeSchema.where('crazy]]quote' => 'crazyqoute').first
+  end
+
+  it 'various methods to bypass national quoted columns for any column, but primarily useful for char/varchar' do
+    value = Class.new do
+      def quoted_id
+        "'T'"
+      end
+    end
+    # Using ActiveRecord's quoted_id feature for objects.
+    assert_sql(/@0 = 'T'/) { SSTestDatatypeMigration.where(char_col: value.new).first }
+    assert_sql(/@0 = 'T'/) { SSTestDatatypeMigration.where(varchar_col: value.new).first }
+    # Using our custom char type data.
+    data = ActiveRecord::Type::SQLServer::Char::Data
+    assert_sql(/@0 = 'T'/) { SSTestDatatypeMigration.where(char_col: data.new('T')).first }
+    assert_sql(/@0 = 'T'/) { SSTestDatatypeMigration.where(varchar_col: data.new('T')).first }
+    # Taking care of everything.
+    assert_sql(/@0 = 'T'/) { SSTestDatatypeMigration.where(char_col: 'T').first }
+    assert_sql(/@0 = 'T'/) { SSTestDatatypeMigration.where(varchar_col: 'T').first }
   end
 
   # With column names that have spaces

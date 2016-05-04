@@ -601,6 +601,20 @@ class SchemaDumperTest < ActiveRecord::TestCase
   # This is a poorly written test and really does not catch the bottom'ness it is meant too. Ours throw it off.
   coerce_tests! :test_foreign_keys_are_dumped_at_the_bottom_to_circumvent_dependency_issues
 
+  # Fall through false positive with no filter.
+  coerce_tests! :test_schema_dumps_partial_indices
+  def test_schema_dumps_partial_indices_coerced
+    index_definition = standard_dump.split(/\n/).grep(/add_index.*company_partial_index/).first.strip
+    assert_equal 'add_index "companies", ["firm_id", "type"], name: "company_partial_index", where: "([rating]>(10))"', index_definition
+  end
+
+end
+
+class SchemaDumperDefaultsTest < ActiveRecord::TestCase
+
+  # These date formats do not match ours. We got these covered in our dumper tests.
+  coerce_tests! :test_schema_dump_defaults_with_universally_supported_types
+
 end
 
 

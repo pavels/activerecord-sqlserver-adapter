@@ -7,6 +7,10 @@ module ActiveRecord
           @native_database_types ||= initialize_native_database_types.freeze
         end
 
+        def data_sources
+          tables + views
+        end
+
         def tables(table_type = 'BASE TABLE')
           select_values "SELECT #{lowercase_schema_reflection_sql('TABLE_NAME')} FROM INFORMATION_SCHEMA.TABLES #{"WHERE TABLE_TYPE = '#{table_type}'" if table_type} ORDER BY TABLE_NAME", 'SCHEMA'
         end
@@ -32,12 +36,13 @@ module ActiveRecord
             else
               name    = index[:index_name]
               unique  = index[:index_description] =~ /unique/
+              where   = select_value("SELECT [filter_definition] FROM sys.indexes WHERE name = #{quote(name)}")
               columns = index[:index_keys].split(',').map do |column|
                 column.strip!
                 column.gsub! '(-)', '' if column.ends_with?('(-)')
                 column
               end
-              indexes << IndexDefinition.new(table_name, name, unique, columns)
+              indexes << IndexDefinition.new(table_name, name, unique, columns, nil, nil, where)
             end
           end
         end
@@ -91,6 +96,7 @@ module ActiveRecord
         end
 
         def change_column_default(table_name, column_name, default)
+          schema_cache.clear_table_cache!(table_name)
           remove_default_constraint(table_name, column_name)
           column_object = schema_cache.columns(table_name).find { |c| c.name.to_s == column_name.to_s }
           do_execute "ALTER TABLE #{quote_table_name(table_name)} ADD CONSTRAINT #{default_constraint_name(table_name, column_name)} DEFAULT #{quote_default_value(default, column_object)} FOR #{quote_column_name(column_name)}"
@@ -201,6 +207,9 @@ module ActiveRecord
             real: { name: 'real' },
             date: { name: 'date' },
             datetime: { name: 'datetime' },
+            datetime2: { name: 'datetime2' },
+            datetimeoffset: { name: 'datetimeoffset' },
+            smalldatetime: { name: 'smalldatetime' },
             timestamp: { name: 'datetime' },
             time: { name: 'time' },
             char: { name: 'char' },
@@ -220,7 +229,11 @@ module ActiveRecord
         end
 
         def column_definitions(table_name)
-          identifier  = SQLServer::Utils.extract_identifiers(table_name)
+          identifier = if database_prefix_remote_server?
+            SQLServer::Utils.extract_identifiers("#{database_prefix}#{table_name}")
+          else
+            SQLServer::Utils.extract_identifiers(table_name)
+          end
           database    = identifier.fully_qualified_database_quoted
           view_exists = schema_cache.view_exists?(table_name)
           view_tblnm  = table_name_or_views_table_name(table_name) if view_exists
@@ -282,6 +295,8 @@ module ActiveRecord
             ci[:type] = case ci[:type]
                         when /^bit|image|text|ntext|datetime$/
                           ci[:type]
+                        when /^datetime2|datetimeoffset$/i
+                          "#{ci[:type]}(#{ci[:datetime_precision]})"
                         when /^time$/i
                           "#{ci[:type]}(#{ci[:datetime_precision]})"
                         when /^numeric|decimal$/i

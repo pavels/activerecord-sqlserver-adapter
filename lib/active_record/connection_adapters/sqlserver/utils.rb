@@ -43,12 +43,20 @@ module ActiveRecord
             [server_quoted, database_quoted].compact.join(SEPARATOR)
           end
 
+          def fully_qualified?
+            parts.compact.size == 4
+          end
+
           def to_s
             quoted
           end
 
           def quoted
             parts.map{ |p| quote(p) if p }.join SEPARATOR
+          end
+
+          def quoted_raw
+            quote @raw_name
           end
 
           def ==(o)
@@ -110,24 +118,16 @@ module ActiveRecord
           s.to_s.gsub /\'/, "''"
         end
 
+        def quoted_raw(name)
+          SQLServer::Utils::Name.new(name).quoted_raw
+        end
+
         def unquote_string(s)
           s.to_s.gsub(/\'\'/, "'")
         end
 
         def extract_identifiers(name)
           SQLServer::Utils::Name.new(name)
-        end
-
-        def with_sqlserver_db_date_formats
-          old_db_format_date = Date::DATE_FORMATS[:db]
-          old_db_format_time = Time::DATE_FORMATS[:db]
-          date_format = Date::DATE_FORMATS[:_sqlserver_dateformat]
-          Date::DATE_FORMATS[:db] = "#{date_format}"
-          Time::DATE_FORMATS[:db] = "#{date_format} %H:%M:%S"
-          yield
-        ensure
-          Date::DATE_FORMATS[:db] = old_db_format_date
-          Time::DATE_FORMATS[:db] = old_db_format_time
         end
 
       end

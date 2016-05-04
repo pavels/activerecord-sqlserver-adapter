@@ -54,7 +54,6 @@ module ActiveRecord
         @visitor = Arel::Visitors::SQLServer.new self
         @prepared_statements = true
         # Our Responsibility
-        @config = config
         @connection_options = config
         connect
         @sqlserver_azure = !!(select_value('SELECT @@version', 'SCHEMA') =~ /Azure/i)
@@ -121,10 +120,11 @@ module ActiveRecord
       end
 
       def disable_referential_integrity
-        do_execute "EXEC sp_MSforeachtable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL'"
+        tables = tables_with_referential_integrity
+        tables.each { |t| do_execute "ALTER TABLE #{t} NOCHECK CONSTRAINT ALL" }
         yield
       ensure
-        do_execute "EXEC sp_MSforeachtable 'ALTER TABLE ? CHECK CONSTRAINT ALL'"
+        tables.each { |t| do_execute "ALTER TABLE #{t} CHECK CONSTRAINT ALL" }
       end
 
       # === Abstract Adapter (Connection Management) ================== #
@@ -162,13 +162,26 @@ module ActiveRecord
 
       # === Abstract Adapter (Misc Support) =========================== #
 
+      def tables_with_referential_integrity
+        schemas_and_tables = select_rows <<-SQL.strip_heredoc
+          SELECT s.name, o.name
+          FROM sys.foreign_keys i
+          INNER JOIN sys.objects o ON i.parent_object_id = o.OBJECT_ID
+          INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+        SQL
+        schemas_and_tables.map do |schema_table|
+          schema, table = schema_table
+          "#{SQLServer::Utils.quoted_raw(schema)}.#{SQLServer::Utils.quoted_raw(table)}"
+        end
+      end
+
       def pk_and_sequence_for(table_name)
         pk = primary_key(table_name)
         pk ? [pk, nil] : nil
       end
 
       def primary_key(table_name)
-        identity_column(table_name).try(:name) || schema_cache.columns(table_name).find(&:is_primary?).try(:name)
+        schema_cache.columns(table_name).find(&:is_primary?).try(:name) || identity_column(table_name).try(:name)
       end
 
       # === SQLServer Specific (DB Reflection) ======================== #
@@ -179,6 +192,16 @@ module ActiveRecord
 
       def sqlserver_azure?
         @sqlserver_azure
+      end
+
+      def database_prefix_remote_server?
+        return false if database_prefix.blank?
+        name = SQLServer::Utils.extract_identifiers(database_prefix)
+        name.fully_qualified? && name.object.blank?
+      end
+
+      def database_prefix
+        @connection_options[:database_prefix]
       end
 
       def version
@@ -221,6 +244,14 @@ module ActiveRecord
         # Date and Time
         m.register_type              'date',              SQLServer::Type::Date.new
         m.register_type              'datetime',          SQLServer::Type::DateTime.new
+        m.register_type              %r{\Adatetime2}i do |sql_type|
+          precision = extract_precision(sql_type)
+          SQLServer::Type::DateTime2.new precision: precision
+        end
+        m.register_type              %r{\Adatetimeoffset}i do |sql_type|
+          precision = extract_precision(sql_type)
+          SQLServer::Type::DateTimeOffset.new precision: precision
+        end
         m.register_type              'smalldatetime',     SQLServer::Type::SmallDateTime.new
         m.register_type              %r{\Atime}i do |sql_type|
           scale = extract_scale(sql_type)
@@ -353,8 +384,13 @@ module ActiveRecord
         a, b, c = @database_dateformat.each_char.to_a
         [a, b, c].each { |f| f.upcase! if f == 'y' }
         dateformat = "%#{a}-%#{b}-%#{c}"
-        ::Date::DATE_FORMATS[:_sqlserver_dateformat] = dateformat
-        ::Time::DATE_FORMATS[:_sqlserver_dateformat] = dateformat
+        ::Date::DATE_FORMATS[:_sqlserver_dateformat]     = dateformat
+        ::Time::DATE_FORMATS[:_sqlserver_dateformat]     = dateformat
+        ::Time::DATE_FORMATS[:_sqlserver_time]           = '%H:%M:%S'
+        ::Time::DATE_FORMATS[:_sqlserver_datetime]       = "#{dateformat} %H:%M:%S"
+        ::Time::DATE_FORMATS[:_sqlserver_datetimeoffset] = lambda { |time|
+          time.strftime "#{dateformat} %H:%M:%S.%9N #{time.formatted_offset}"
+        }
       end
 
     end

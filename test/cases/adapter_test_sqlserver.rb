@@ -240,6 +240,7 @@ class AdapterTestSQLServer < ActiveRecord::TestCase
   describe 'database statements' do
 
     it "run the database consistency checker useroptions command" do
+      skip 'on azure' if connection_sqlserver_azure?
       keys = [:textsize, :language, :isolation_level, :dateformat]
       user_options = connection.user_options
       keys.each do |key|
@@ -249,6 +250,7 @@ class AdapterTestSQLServer < ActiveRecord::TestCase
     end
 
     it "return a underscored key hash with indifferent access of the results" do
+      skip 'on azure' if connection_sqlserver_azure?
       user_options = connection.user_options
       assert_equal 'read committed', user_options['isolation_level']
       assert_equal 'read committed', user_options[:isolation_level]
@@ -412,6 +414,28 @@ class AdapterTestSQLServer < ActiveRecord::TestCase
     it 'using alternate view defintion still be able to find real default' do
       assert_equal 'null', SSTestStringDefaultsBigView.new.pretend_null,
         SSTestStringDefaultsBigView.columns_hash['pretend_null'].inspect
+    end
+
+  end
+
+  describe 'database_prefix_remote_server?' do
+
+    after do
+      connection_options.delete(:database_prefix)
+    end
+
+    it 'returns false if database_prefix is not configured' do
+      assert_equal false, connection.database_prefix_remote_server?
+    end
+
+    it 'returns true if database_prefix has been set' do
+      connection_options[:database_prefix] = "server.database.schema."
+      assert_equal true, connection.database_prefix_remote_server?
+    end
+
+    it 'returns false if database_prefix has been set incorrectly' do
+      connection_options[:database_prefix] = "server.database.schema"
+      assert_equal false, connection.database_prefix_remote_server?
     end
 
   end

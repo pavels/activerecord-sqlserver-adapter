@@ -4,27 +4,46 @@ class SQLServerRakeTest < ActiveRecord::TestCase
 
   self.use_transactional_fixtures = false
 
+  cattr_accessor :azure_skip
+  self.azure_skip = connection_sqlserver_azure?
+
   let(:db_tasks)              { ActiveRecord::Tasks::DatabaseTasks }
   let(:new_database)          { 'activerecord_unittest_tasks' }
   let(:default_configuration) { ARTest.connection_config['arunit'] }
   let(:configuration)         { default_configuration.merge('database' => new_database) }
 
-  before do
+  before { skip 'on azure' if azure_skip }
+  before { disconnect! unless azure_skip }
+  after  { reconnect unless azure_skip }
+
+  private
+
+  def disconnect!
     connection.disconnect!
   end
 
-  after do
-    ActiveRecord::Base.establish_connection(default_configuration)
-    connection.drop_database(new_database) rescue nil
+  def reconnect
+    config = default_configuration
+    if connection_sqlserver_azure?
+      ActiveRecord::Base.establish_connection(config.merge('database' => 'master'))
+      connection.drop_database(new_database) rescue nil
+      disconnect!
+      ActiveRecord::Base.establish_connection(config)
+    else
+      ActiveRecord::Base.establish_connection(config)
+      connection.drop_database(new_database) rescue nil
+    end
   end
 
 end
 
 class SQLServerRakeCreateTest < SQLServerRakeTest
 
+  self.azure_skip = false
+
   it 'establishes connection to database after create ' do
     db_tasks.create configuration
-    connection.current_database.must_equal(new_database)
+    connection.current_database.must_equal(connection_sqlserver_azure? ? 'master' : new_database)
   end
 
   it 'creates database with default collation' do
@@ -46,6 +65,8 @@ class SQLServerRakeCreateTest < SQLServerRakeTest
 end
 
 class SQLServerRakeDropTest < SQLServerRakeTest
+
+  self.azure_skip = false
 
   it 'drops database and uses master' do
     db_tasks.create configuration
@@ -120,9 +141,8 @@ class SQLServerRakeStructureDumpLoadTest < SQLServerRakeTest
   end
 
   it 'dumps structure and accounts for defncopy oddities' do
-    # CHANGED: [TinyTDS] When utilities are available http://git.io/v3tBk
-    skip if host_windows?
-    db_tasks.structure_dump configuration, filename
+    skip 'debug defncopy on windows later' if host_windows?
+    quietly { db_tasks.structure_dump configuration, filename }
     filedata.wont_match %r{\AUSE.*\z}
     filedata.wont_match %r{\AGO.*\z}
     filedata.must_match %r{email\s+nvarchar\(4000\)}
@@ -131,9 +151,8 @@ class SQLServerRakeStructureDumpLoadTest < SQLServerRakeTest
   end
 
   it 'can load dumped structure' do
-    # CHANGED: [TinyTDS] When utilities are available http://git.io/v3tBk
-    skip if host_windows?
-    db_tasks.structure_dump configuration, filename
+    skip 'debug defncopy on windows later' if host_windows?
+    quietly { db_tasks.structure_dump configuration, filename }
     filedata.must_match %r{CREATE TABLE dbo\.users}
     db_tasks.purge(configuration)
     connection.tables.wont_include 'users'

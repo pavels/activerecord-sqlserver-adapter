@@ -117,7 +117,8 @@ module ActiveRecord
             case @connection_options[:mode]
             when :dblib
               result = @connection.execute(sql)
-              result.each(as: :hash, cache_rows: true) do |row|
+              options = { as: :hash, cache_rows: true, timezone: ActiveRecord::Base.default_timezone || :utc }
+              result.each(options) do |row|
                 r = row.with_indifferent_access
                 yield(r) if block_given?
               end
@@ -179,8 +180,8 @@ module ActiveRecord
           if sqlserver_azure?
             sql = %(SELECT CASE [transaction_isolation_level]
                     WHEN 0 THEN NULL
-                    WHEN 1 THEN 'READ UNCOMITTED'
-                    WHEN 2 THEN 'READ COMITTED'
+                    WHEN 1 THEN 'READ UNCOMMITTED'
+                    WHEN 2 THEN 'READ COMMITTED'
                     WHEN 3 THEN 'REPEATABLE READ'
                     WHEN 4 THEN 'SERIALIZABLE'
                     WHEN 5 THEN 'SNAPSHOT' END AS [isolation_level]
@@ -216,7 +217,7 @@ module ActiveRecord
         end
 
         def sql_for_insert(sql, pk, id_value, sequence_name, binds)
-          sql = if pk && self.class.use_output_inserted
+          sql = if pk && self.class.use_output_inserted && !database_prefix_remote_server?
             quoted_pk = SQLServer::Utils.extract_identifiers(pk).quoted
             declare_temp_table = "DECLARE @TblOutput TABLE ( [OutPK] sql_variant ) \n"
             select_from_output = "\n SELECT [OutPK] FROM @TblOutput \n"

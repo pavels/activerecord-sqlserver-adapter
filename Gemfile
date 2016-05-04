@@ -37,6 +37,8 @@ end
 group :tinytds do
   if ENV['TINYTDS_SOURCE']
     gem 'tiny_tds', path: ENV['TINYTDS_SOURCE']
+  elsif ENV['TINYTDS_VERSION']
+    gem 'tiny_tds', ENV['TINYTDS_VERSION']
   else
     gem 'tiny_tds'
   end
@@ -46,3 +48,14 @@ group :odbc do
   gem 'ruby-odbc'
 end
 
+group :development do
+  gem 'mocha'
+  gem 'minitest', '< 5.3.4' # PENDING: [Rails5.x] Remove test order constraint.
+  gem 'minitest-spec-rails'
+  gem 'pry'
+end
+
+group :guard do
+  gem 'guard'
+  gem 'guard-minitest'
+end

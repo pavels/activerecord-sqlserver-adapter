@@ -1,3 +1,71 @@
+## v4.2.11
+
+#### Fixed
+
+* Undefined method `database_prefix_remote_server?' Fixes #450. Thanks @jippeholwerda
+* Document two methods for avoiding N'' quoting on char/varchar columns.
+* First run failure of `change_column` while dropping constraint. Fixes #420. Thanks @GrumpyRainbow @rkr090
+* Rounding errors w/datetime2(0) types having no fractional seconds. Fixes #465. Thanks @alawton
+
+#### Changed
+
+* Supporting escape hatch for N'' quoting. Remove `#is_utf8` string check in `#_quote` method.
+  This duplicated strings and forced encoding which was actually wasteful.
+
+
+## v4.2.10
+
+#### Fixed
+
+* Ensure small datetime/datetime2 fractionals are properly quoted. Fixes #457.
+
+
+## v4.2.9
+
+#### Fixed
+
+* Conform to new data_sources interfaces. See: https://git.io/va4Fp
+* The `primary_key` method falls back to Identity columns. Not the other way around. Fixes #454. Thanks @marceloeloelo
+* Ensure that `execute_procedure` returns proper time zones. Fixes #449
+
+#### Changed
+
+* Run tests with verbose false.
+
+
+## v4.2.8
+
+#### Fixed
+
+* Azure-Friendly Disable Referential Integrity. No more `sp_MSforeachtable` usage. Fixes #421
+* Azure-Friendly DB create/drop. Fixes #442
+  - Create allows edition options like: MAXSIZE, EDITION, and SERVICE_OBJECTIVE.
+
+
+## v4.2.7
+
+#### Added
+
+* Support 2008 Datatypes Using TDSVER=7.3. Fixes #433
+
+#### Changed
+
+* Test now use latest v0.9.5 of TinyTDS. Includes tests for `defncopy` Windows binstub.
+* Make linked servers stronger. Fixes #427. Thanks @jippeholwerda
+* Use proper module for the `sqlserver_connection` method. Fixes #431. Thanks @jippeholwerda
+* All datetime casting using the `Time::DATE_FORMATS[:_sqlserver_*]` formats set after connection.
+
+#### Removed
+
+* The `SQLServer::Utils.with_sqlserver_db_date_formats` helper and `quoted_date` hacks.
+* The `Quoter` value type which allowed column => type special case quoting.
+
+#### Fixed
+
+* Every time datatype has perfect micro/nano second handling.
+* All supported datatypes dump defaults properly to schema.rb
+* Partial indexes using `:where` in schema dumper. Fixes #153
+
 
 ## v4.2.6
 

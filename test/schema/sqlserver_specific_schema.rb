@@ -19,21 +19,29 @@ ActiveRecord::Schema.define do
     t.date      :date_col
     t.binary    :binary_col
     # Our type methods.
-    t.real          :real_col
-    t.money         :money_col
-    t.smallmoney    :smallmoney_col
-    t.char          :char_col
-    t.varchar       :varchar_col
-    t.text_basic    :text_basic_col
-    t.nchar         :nchar_col
-    t.ntext         :ntext_col
-    t.binary_basic  :binary_basic_col
-    t.varbinary     :varbinary_col
-    t.uuid          :uuid_col
-    t.ss_timestamp  :sstimestamp_col
+    t.real           :real_col
+    t.money          :money_col
+    t.datetime2      :datetime2_col
+    t.datetimeoffset :datetimeoffset
+    t.smallmoney     :smallmoney_col
+    t.char           :char_col
+    t.varchar        :varchar_col
+    t.text_basic     :text_basic_col
+    t.nchar          :nchar_col
+    t.ntext          :ntext_col
+    t.binary_basic   :binary_basic_col
+    t.varbinary      :varbinary_col
+    t.uuid           :uuid_col
+    t.ss_timestamp   :sstimestamp_col
   end
 
   # Edge Cases
+
+  create_table 'sst_bookings', force: true do |t|
+    t.string :name
+    t.datetime2 :created_at, null: false
+    t.datetime2 :updated_at, null: false
+  end
 
   create_table 'sst_uuids', force: true, id: :uuid do |t|
     t.string :name
@@ -116,6 +124,12 @@ ActiveRecord::Schema.define do
     t.date   :date
   end
   execute "sp_bindefault 'sst_getdateobject', 'sst_defaultobjects.date'"
+
+  execute "DROP PROCEDURE my_getutcdate" rescue nil
+  execute <<-SQL
+    CREATE PROCEDURE my_getutcdate AS
+    SELECT GETUTCDATE() utcdate
+  SQL
 
   # Constraints
 

@@ -1,10 +1,11 @@
-require 'bundler' ; Bundler.require :default, :development, :test
+require 'bundler/setup' ; Bundler.require :default, :development
 require 'support/paths_sqlserver'
 require 'support/minitest_sqlserver'
 require 'cases/helper'
 require 'support/load_schema_sqlserver'
 require 'support/coerceable_test_sqlserver'
 require 'support/sql_counter_sqlserver'
+require 'support/connection_reflection'
 require 'mocha/mini_test'
 
 module ActiveRecord
@@ -12,31 +13,38 @@ module ActiveRecord
 
     SQLServer = ActiveRecord::ConnectionAdapters::SQLServer
 
-    include ARTest::SQLServer::CoerceableTest
+    include ARTest::SQLServer::CoerceableTest,
+            ARTest::SQLServer::ConnectionReflection
 
     let(:logger) { ActiveRecord::Base.logger }
 
-    class << self
-      def connection_mode_dblib? ; ActiveRecord::Base.connection.instance_variable_get(:@connection_options)[:mode] == :dblib ; end
-      def connection_mode_odbc? ; ActiveRecord::Base.connection.instance_variable_get(:@connection_options)[:mode] == :odbc ; end
-      def sqlserver_azure? ; ActiveRecord::Base.connection.sqlserver_azure? ; end
-      def host_windows? ; RbConfig::CONFIG['host_os'] =~ /mswin|mingw/ ; end
-    end
 
-    def connection_mode_dblib? ; self.class.connection_mode_dblib? ; end
-    def connection_mode_odbc? ; self.class.connection_mode_odbc? ; end
-    def sqlserver_azure? ; self.class.sqlserver_azure? ; end
-    def host_windows? ; self.class.host_windows? ; end
+    private
 
-    def connection
-      ActiveRecord::Base.connection
+    def host_windows?
+      RbConfig::CONFIG['host_os'] =~ /mswin|mingw/
     end
 
     def with_use_output_inserted_disabled
-      ActiveRecord::ConnectionAdapters::SQLServerAdapter.use_output_inserted = false
+      klass = ActiveRecord::ConnectionAdapters::SQLServerAdapter
+      klass.use_output_inserted = false
       yield
     ensure
-      ActiveRecord::ConnectionAdapters::SQLServerAdapter.use_output_inserted = true
+      klass.use_output_inserted = true
+    end
+
+    def silence_stream(stream)
+      old_stream = stream.dup
+      stream.reopen(RbConfig::CONFIG['host_os'] =~ /mswin|mingw/ ? 'NUL:' : '/dev/null')
+      stream.sync = true
+      yield
+    ensure
+      stream.reopen(old_stream)
+      old_stream.close
+    end
+
+    def quietly
+      silence_stream(STDOUT) { silence_stream(STDERR) { yield } }
     end
 
   end
